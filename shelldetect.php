@@ -373,7 +373,7 @@ class shellDetector {
           self::output('<dt>Entropy:</dt><dd class="green">'.$entropy.'</dd>',null,false);
           //IC
           $ic = $this->calc_ic($lw[0]);
-          self::output('<dt>Entropy:</dt><dd class="green">'.$entropy.'</dd>',null,false);
+          
           self::output('<dt>IC:</dt><dd class="green">'.$ic.'</dd>',null,false);
           self::output('</dl></dd></dl>',null,false);
           $this->suspcounter++;
