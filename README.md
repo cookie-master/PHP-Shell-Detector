@@ -13,6 +13,8 @@ Piotr Łuczko
 
 John Thornton
 
+Ingo Eyring
+
 Detection
 ---------
 
