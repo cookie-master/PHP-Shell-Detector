@@ -3,6 +3,16 @@
  * Web Shell Detector v1.66
  * Web Shell Detector is released under the MIT License <http://www.opensource.org/licenses/mit-license.php>
  * https://github.com/emposha/PHP-Shell-Detector
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+ * 
+ * 
  */
 
 set_time_limit(0);
@@ -118,13 +128,15 @@ class shellDetector {
   private $_version = '1.66';
 
   //system: regex for detect Suspicious behavior
-  private $_regex = '%(preg_replace.*\/e|`.*?\$.*?`|\bcreate_function\b|\bpassthru\b|\bshell_exec\b|\bexec\b|\bbase64_decode\b|\bedoced_46esab\b|\beval\b|\bsystem\b|\bproc_open\b|\bpopen\b|\bcurl_exec\b|\bcurl_multi_exec\b|\bparse_ini_file\b|\bshow_source\b)%';
-
+  private $_regex = '%(preg_replace.*\/e|`.*?\$.*?`|\bcreate_function\b|\bpassthru\b|\bshell_exec\b|\bexec\b|\bbase64_decode\b|\bedoced_46esab\b|\beval\b|\bsystem\b|\bproc_open\b|\bpopen\b|\bcurl_exec\b|\bcurl_multi_exec\b|\bparse_ini_file\b|\bshow_source\b|\bphpinfo\b|\bpcntl_exec\b|\bpython_eval\b|\bpassthru\b)%';
   //system: public key to encrypt file content
   private $_public_key = 'LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0NCk1JR2ZNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0R05BRENCaVFLQmdRRDZCNWZaY2NRN2dROS93TitsWWdONUViVU4NClNwK0ZaWjcyR0QvemFrNEtDWkZISEwzOHBYaS96bVFBU1hNNHZEQXJjYllTMUpodERSeTFGVGhNb2dOdzVKck8NClA1VGprL2xDcklJUzVONWVhYUQvK1NLRnFYWXJ4bWpMVVhmb3JIZ25rYUIxQzh4dFdHQXJZWWZWN2lCVm1mRGMNCnJXY3hnbGNXQzEwU241ZDRhd0lEQVFBQg0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tDQo=';
 
   private $_self = '';
 
+  private $maxstrlng = 250;
+  private $maxentropy = 5.5;
+  private $minic = 0.020;
   /**
    * Constructor
    */
@@ -159,6 +171,7 @@ class shellDetector {
     if (file_exists('shelldetect.db')) {
       $context = stream_context_create(array('http' => array('timeout' => 30)));
       $this->fingerprints = unserialize(base64_decode(file_get_contents('shelldetect.db', 0, $context)));
+      #var_dump($this->fingerprints);
     }
 
     if ($this->remotefingerprint) {
@@ -349,6 +362,11 @@ class shellDetector {
         } 
         self::output('<dt>' . $this->t('Fingerprint:') . '</dt><dd class="' . $shellcolor . '">' . $this->t('Positive, it`s a ') . $shellflag . '</dd></dl></dd></dl>', null, false);
       } else if ($this->hidesuspicious != true) {
+         //iey changed for calculating the entropy
+        $lw = $this->longestString($content);
+        $entropy = $this->entropy($lw[0]);
+        //IC
+        $ic = $this->calc_ic($lw[0]); 
      	 if (preg_match_all($this->_regex, $content, $matches)) {
           $this->fileInfo($file, $base64_content);
           if ($this->showlinenumbers) {
@@ -367,36 +385,45 @@ class shellDetector {
           }
           $key = $this->fileprepare($file, $base64_content);
           self::output('<dt>' . $this->t('Fingerprint:') . '</dt><dd class="green">' . $key . '</dd>', null, false);
-          //iey changed for calculating the entropy
-          $lw = $this->longestString($content);
-          $entropy = $this->entropy($lw[0]);
+          self::output('<dt>Longest Word Length:</dt><dd class="green">'.$lw[1].'</dd>',null,false);
           self::output('<dt>Entropy:</dt><dd class="green">'.$entropy.'</dd>',null,false);
-          //IC
-          $ic = $this->calc_ic($lw[0]);
-          
           self::output('<dt>IC:</dt><dd class="green">'.$ic.'</dd>',null,false);
-          self::output('</dl></dd></dl>',null,false);
+          
           $this->suspcounter++;
+        }elseif($lw[1] > $this->maxstrlng){
+            $this->fileInfo($file, $base64_content);
+            self::output('<dt>Longest Word Length:</dt><dd class="green">'.$lw[1].'</dd>',null,false);
+            $this->suspcounter++;
+        }elseif($entropy > $this->maxentropy){
+            $this->fileInfo($file, $base64_content);
+            self::output('<dt>Entropy:</dt><dd class="green">'.$entropy.'</dd>',null,false);
+            $this->suspcounter++;
+        }elseif($ic <= $this->minic){
+            $this->fileInfo($file, $base64_content);
+            self::output('<dt>IC:</dt><dd class="green">'.$ic.'</dd>',null,false);
+            $this->suspcounter++;
         }
+         
+        self::output('</dl></dd></dl>',null,false);
       } else {
+        $lw = $this->longestString($content);
+        $entropy = $this->entropy($lw[0]);
+        $ic = $this->calc_ic($lw[0]);
+          
         if (preg_match_all($this->_regex, $content, $matches)) {
           $this->suspcounter++;
+        }elseif($lw[1] > $this->maxstrlng){
+            $this->suspcounter++;
+        }elseif($entropy > $this->maxentropy){
+            $this->suspcounter++;
+        }elseif($ic <= $this->minic){
+            $this->suspcounter++;
         }
       }
+      
+      
   }
-
-  /**
-   * Check files for using suspicious function
-   */
-  private function anaylize() {
-    foreach ($this->_files as $file) {
-    	if (is_readable($file)) {
-      	$this->analyze($file);
-    	}  
-    }
-    self::output('', 'clearer');
-    self::output($this->t('<strong>Status</strong>: @count suspicious files found and @shells shells found. <a href="' . $_SERVER['PHP_SELF'] . '?s=1">Rescan and show suspicious files</a>' , array("@count" => $this->suspcounter, "@shells" => count($this->_badfiles) ? '<strong>' . count($this->_badfiles) . '</strong>' : count($this->_badfiles))), (count($this->_badfiles) ? 'error' : 'success'));
-  }
+  
   /**
   * The longest string test identifies the length of the longest uninterrupted string within a 
   * file. This is useful because obfuscated code is often stored as a long string of encoded 
@@ -422,7 +449,8 @@ class shellDetector {
   }
   
   /**
-  * calculate the Shannon entropy of “data” and return a floating point number 
+  * IEY
+  * The code will calculate the Shannon entropy of “data” and return a floating point number 
   * between 0 and 8. This value represents the byte entropy of “data”. This number equates to 
   * the number of bits per character required to represent “data”. A file containing a large 
   * degree of randomness or information would require more bits to communicate, hence producing 
@@ -443,12 +471,31 @@ class shellDetector {
        }
        return $h;
    }
+  
+  /**
+  * iey 
+  */
   /**
     * Calculate the index of coincidence for a string of text. Add up the
     * probability of each character being chosen twice in a row (n choose 2).
     * Text that matches a language will have a higher index than random text (as
     * there are certain characters in languages that appear more often than others)
     * 
+    * The index of coincidence (I.C.) is a technique used in the cryptanalysis and natural 
+    * language analysis of text. It calculates the occurrence of letter combinations as 
+    * compared to a text sample where all letters are equally distributed. This returns a 
+    * value which is generally consistent for different types of text; either by spoken 
+    * language or scripting language. This value is useful in identifying text files with 
+    * I.C.’s uncharacteristic for files of similar type. This may indicate that the file 
+    * contains portions of text, either encoded or encrypted, that deviate from normal 
+    * character distributions.
+    * 
+    * What are values of IC among languages?
+
+        English    0.0667    French    0.0778
+        German    0.0762    Spanish    0.0770
+        Italian    0.0738    Russian    0.0529
+    *
     * @param string $text the text to calculate the IC for
     * @return int the calculated IC
     */
@@ -460,7 +507,20 @@ class shellDetector {
         }
         return number_format($index, 3);
     }
-  
+   
+  /**
+   * Check files for using suspicious function
+   */
+  private function anaylize() {
+    foreach ($this->_files as $file) {
+    	if (is_readable($file)) {
+      	$this->analyze($file);
+    	}  
+    }
+    self::output('', 'clearer');
+    self::output($this->t('<strong>Status</strong>: @count suspicious files found and @shells shells found. <a href="' . $_SERVER['PHP_SELF'] . '?s=1">Rescan and show suspicious files</a>' , array("@count" => $this->suspcounter, "@shells" => count($this->_badfiles) ? '<strong>' . count($this->_badfiles) . '</strong>' : count($this->_badfiles))), (count($this->_badfiles) ? 'error' : 'success'));
+  }
+
   /**
    * Prepare file submit function
    */
@@ -800,4 +860,4 @@ class shellDetector {
   }
 
 }
-?>
+
