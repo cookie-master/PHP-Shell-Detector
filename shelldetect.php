@@ -366,7 +366,16 @@ class shellDetector {
             self::output('<dt>' . $this->t('suspicious functions used:') . '</dt><dd>' . $this->_implode($matches) . '&nbsp;</dd>', null, false);
           }
           $key = $this->fileprepare($file, $base64_content);
-          self::output('<dt>' . $this->t('Fingerprint:') . '</dt><dd class="green">' . $key . '</dd></dl></dd></dl>', null, false);
+          self::output('<dt>' . $this->t('Fingerprint:') . '</dt><dd class="green">' . $key . '</dd>', null, false);
+          //iey changed for calculating the entropy
+          $lw = $this->longestString($content);
+          $entropy = $this->entropy($lw[0]);
+          self::output('<dt>Entropy:</dt><dd class="green">'.$entropy.'</dd>',null,false);
+          //IC
+          $ic = $this->calc_ic($lw[0]);
+          self::output('<dt>Entropy:</dt><dd class="green">'.$entropy.'</dd>',null,false);
+          self::output('<dt>IC:</dt><dd class="green">'.$ic.'</dd>',null,false);
+          self::output('</dl></dd></dl>',null,false);
           $this->suspcounter++;
         }
       } else {
@@ -388,7 +397,70 @@ class shellDetector {
     self::output('', 'clearer');
     self::output($this->t('<strong>Status</strong>: @count suspicious files found and @shells shells found. <a href="' . $_SERVER['PHP_SELF'] . '?s=1">Rescan and show suspicious files</a>' , array("@count" => $this->suspcounter, "@shells" => count($this->_badfiles) ? '<strong>' . count($this->_badfiles) . '</strong>' : count($this->_badfiles))), (count($this->_badfiles) ? 'error' : 'success'));
   }
-
+  /**
+  * The longest string test identifies the length of the longest uninterrupted string within a 
+  * file. This is useful because obfuscated code is often stored as a long string of encoded 
+  * text within a file. Many popular encoding methods, such as base64 encoding, will produce a 
+  * long string without space characters. Typical text and script files will be composed of 
+  * relatively short length words; identifying files with uncharacteristically long strings 
+  * may help to identify files with obfuscated code.
+  * 
+  * @param string $filecontent
+  */
+  private function longestString($filecontent){
+    $words = explode(" ",$filecontent);
+    $longestWordLength = 0;
+    $longestWord = '';
+    foreach ($words as $word) {
+       if (strlen($word) > $longestWordLength) {
+          $longestWordLength = strlen($word);
+          $longestWord = $word;
+       }
+    }
+    
+    return array($longestWord,$longestWordLength);
+  }
+  
+  /**
+  * calculate the Shannon entropy of “data” and return a floating point number 
+  * between 0 and 8. This value represents the byte entropy of “data”. This number equates to 
+  * the number of bits per character required to represent “data”. A file containing a large 
+  * degree of randomness or information would require more bits to communicate, hence producing 
+  * a larger entropy value. Changing the log base from 2 to 8 within this function would return 
+  * a value between 1 and 3. This may be usefull to match other calculated measures of entropy. 
+  * The higher the number, the more entropy is present within the data string indicating a high 
+  * degree of randomness or variety of information.
+  * 
+  * @param string $string longest word in file
+  */
+  private function entropy($string) {
+       $h=0;
+       $size = strlen($string);
+       foreach (count_chars($string, 1) as $v) {
+          $p = $v/$size;
+          $h -= $p*log($p)/log(2);
+          #$h -= $p*log($p)/log(8);
+       }
+       return $h;
+   }
+  /**
+    * Calculate the index of coincidence for a string of text. Add up the
+    * probability of each character being chosen twice in a row (n choose 2).
+    * Text that matches a language will have a higher index than random text (as
+    * there are certain characters in languages that appear more often than others)
+    * 
+    * @param string $text the text to calculate the IC for
+    * @return int the calculated IC
+    */
+    function calc_ic( $text ) {
+        $index = 0;
+        $length = strlen($text);
+        foreach (count_chars($text, 1) as $freq) {
+            $index += ($freq / $length) * (($freq - 1) / ($length - 1));
+        }
+        return number_format($index, 3);
+    }
+  
   /**
    * Prepare file submit function
    */
